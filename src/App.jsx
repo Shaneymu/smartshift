@@ -28,7 +28,7 @@ const formatDateKey = (date) => {
 
 const generateDates = (startDate, days) => {
   const dates = [];
-  const start = new Date(startDate.getTime()); // Clone to avoid mutation
+  const start = new Date(startDate.getTime());
   for (let i = 0; i < days; i++) {
     const date = new Date(start.getTime());
     date.setDate(start.getDate() + i);
@@ -116,8 +116,482 @@ const generateInitialShifts = () => {
 
 // --- COMPONENTS ---
 
+// 0. Patient Self-Triage Component
+const PatientTriage = ({ onBack }) => {
+  const [step, setStep] = useState('emergency');
+  const [triageData, setTriageData] = useState({
+    hasEmergency: null,
+    bodySystem: '',
+    commonComplaint: '',
+    painScale: 5,
+    duration: '',
+    dailyImpact: '',
+    hasFever: null,
+    feverTemp: '',
+  });
+  const [referenceNumber, setReferenceNumber] = useState('');
+  const [showClinician, setShowClinician] = useState(false);
+
+  const generateReference = () => {
+    const ref = `ST-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    setReferenceNumber(ref);
+    return ref;
+  };
+
+  const handleEmergencyCheck = (hasEmergency) => {
+    setTriageData({ ...triageData, hasEmergency });
+    if (hasEmergency) {
+      setStep('call999');
+    } else {
+      setStep('symptoms');
+    }
+  };
+
+  const handleSymptomsNext = () => {
+    if (!triageData.bodySystem && !triageData.commonComplaint) return;
+    setStep('severity');
+  };
+
+  const handleSeverityNext = () => {
+    generateReference();
+    setStep('results');
+  };
+
+  const getRecommendation = () => {
+    const { painScale, dailyImpact, hasFever, bodySystem } = triageData;
+    const isUrgent = painScale >= 8 || dailyImpact === 'severe' || (hasFever && parseFloat(triageData.feverTemp) >= 39);
+    const isModerate = painScale >= 5 || dailyImpact === 'moderate' || hasFever;
+    
+    if (bodySystem === 'unsure' || isUrgent) {
+      return { level: 'urgent', message: 'We recommend speaking with a clinician as soon as possible.', color: 'red' };
+    } else if (isModerate) {
+      return { level: 'moderate', message: 'Please book an appointment within 24-48 hours.', color: 'yellow' };
+    }
+    return { level: 'mild', message: 'Your symptoms appear mild. Monitor and seek help if they worsen.', color: 'green' };
+  };
+
+  const bodySystemOptions = [
+    { value: 'respiratory', label: 'Respiratory (breathing, cough, chest)' },
+    { value: 'digestive', label: 'Digestive (stomach, nausea, bowel)' },
+    { value: 'musculoskeletal', label: 'Musculoskeletal (muscles, joints, back)' },
+    { value: 'neurological', label: 'Neurological (headache, dizziness, numbness)' },
+    { value: 'skin', label: 'Skin (rash, itching, wounds)' },
+    { value: 'urinary', label: 'Urinary (pain, frequency, blood)' },
+    { value: 'mental', label: 'Mental Health (anxiety, mood, sleep)' },
+    { value: 'other', label: 'Other' },
+    { value: 'unsure', label: "I'm not sure" },
+  ];
+
+  const commonComplaints = [
+    'Headache', 'Cold/Flu symptoms', 'Sore throat', 'Ear pain', 
+    'Back pain', 'Stomach ache', 'Fatigue', 'Skin rash', 'Other'
+  ];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white p-4 md:p-8">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <button onClick={onBack} className="text-gray-600 hover:text-gray-800 flex items-center gap-2">
+            <X size={20} /> Back to Login
+          </button>
+          <button 
+            onClick={() => setShowClinician(true)}
+            className="bg-red-100 text-red-700 px-4 py-2 rounded-lg font-medium hover:bg-red-200 flex items-center gap-2 border border-red-200"
+          >
+            <AlertTriangle size={18} /> Speak to Clinician
+          </button>
+        </div>
+
+        <div className="text-center mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center justify-center gap-2">
+            <Zap className="text-blue-600" /> Patient Self-Triage
+          </h1>
+          <p className="text-gray-500 mt-2">Answer a few questions to help us understand your needs</p>
+        </div>
+
+        {step !== 'call999' && step !== 'results' && (
+          <div className="flex justify-center gap-2 mb-8">
+            {['emergency', 'symptoms', 'severity'].map((s, i) => (
+              <div key={s} className={`h-2 w-16 rounded-full ${
+                step === s ? 'bg-blue-600' : 
+                ['emergency', 'symptoms', 'severity'].indexOf(step) > i ? 'bg-blue-300' : 'bg-gray-200'
+              }`} />
+            ))}
+          </div>
+        )}
+
+        {step === 'emergency' && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8 border border-gray-100">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+              <h2 className="text-lg font-bold text-red-800 flex items-center gap-2 mb-3">
+                <AlertTriangle className="text-red-600" /> Immediate Warning Signs
+              </h2>
+              <p className="text-red-700 mb-4">Are you experiencing any of the following?</p>
+              <ul className="space-y-2 text-red-700 text-sm">
+                <li className="flex items-start gap-2"><span className="text-red-500">•</span> Chest pain or pressure</li>
+                <li className="flex items-start gap-2"><span className="text-red-500">•</span> Difficulty breathing or shortness of breath</li>
+                <li className="flex items-start gap-2"><span className="text-red-500">•</span> Severe or uncontrolled bleeding</li>
+                <li className="flex items-start gap-2"><span className="text-red-500">•</span> Signs of stroke (face drooping, arm weakness, speech difficulty)</li>
+                <li className="flex items-start gap-2"><span className="text-red-500">•</span> Loss of consciousness or confusion</li>
+                <li className="flex items-start gap-2"><span className="text-red-500">•</span> Severe allergic reaction</li>
+              </ul>
+            </div>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => handleEmergencyCheck(true)}
+                className="flex-1 bg-red-600 text-white py-4 rounded-xl font-bold hover:bg-red-700 transition-colors"
+              >
+                Yes - I need emergency help
+              </button>
+              <button 
+                onClick={() => handleEmergencyCheck(false)}
+                className="flex-1 bg-green-600 text-white py-4 rounded-xl font-bold hover:bg-green-700 transition-colors"
+              >
+                No - Continue assessment
+              </button>
+            </div>
+            <p className="text-center text-xs text-gray-400 mt-4">* Required question</p>
+          </div>
+        )}
+
+        {step === 'call999' && (
+          <div className="bg-red-600 rounded-2xl shadow-lg p-8 text-white text-center">
+            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="text-red-600" size={40} />
+            </div>
+            <h2 className="text-3xl font-bold mb-4">Call 999 Immediately</h2>
+            <p className="text-red-100 text-lg mb-6">
+              Based on your symptoms, you need emergency medical attention.
+            </p>
+            <a 
+              href="tel:999" 
+              className="inline-block bg-white text-red-600 px-8 py-4 rounded-xl font-bold text-xl hover:bg-red-50 transition-colors"
+            >
+              📞 Call 999 Now
+            </a>
+            <p className="text-red-200 text-sm mt-6">
+              If you cannot call, ask someone nearby to help you.
+            </p>
+            <button 
+              onClick={() => { setTriageData({...triageData, hasEmergency: false}); setStep('symptoms'); }}
+              className="mt-6 text-red-200 underline hover:text-white text-sm"
+            >
+              I made a mistake - go back
+            </button>
+          </div>
+        )}
+
+        {step === 'symptoms' && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8 border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-6">Tell us about your symptoms</h2>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Which body system is affected? <span className="text-red-500">*</span>
+                </label>
+                <select 
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={triageData.bodySystem}
+                  onChange={(e) => setTriageData({...triageData, bodySystem: e.target.value})}
+                >
+                  <option value="">Select an option...</option>
+                  {bodySystemOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Or select a common complaint:
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {commonComplaints.map(complaint => (
+                    <button
+                      key={complaint}
+                      onClick={() => setTriageData({...triageData, commonComplaint: complaint})}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                        triageData.commonComplaint === complaint 
+                          ? 'bg-blue-600 text-white' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {complaint}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-8">
+              <button 
+                onClick={() => setStep('emergency')}
+                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-200"
+              >
+                Back
+              </button>
+              <button 
+                onClick={handleSymptomsNext}
+                disabled={!triageData.bodySystem && !triageData.commonComplaint}
+                className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'severity' && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8 border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-800 mb-6">Symptom Severity Assessment</h2>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Pain level (1-10) <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-500">No pain</span>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={triageData.painScale}
+                    onChange={(e) => setTriageData({...triageData, painScale: parseInt(e.target.value)})}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-500">Severe</span>
+                  <span className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                    triageData.painScale <= 3 ? 'bg-green-500' : 
+                    triageData.painScale <= 6 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}>
+                    {triageData.painScale}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  How long have you had these symptoms? <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {['Less than 24 hours', '1-3 days', '4-7 days', 'More than a week'].map(dur => (
+                    <button
+                      key={dur}
+                      onClick={() => setTriageData({...triageData, duration: dur})}
+                      className={`p-3 rounded-lg text-sm font-medium transition-colors border ${
+                        triageData.duration === dur 
+                          ? 'bg-blue-50 border-blue-500 text-blue-700' 
+                          : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {dur}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Impact on daily activities <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: 'mild', label: 'Mild', desc: 'Can do most activities' },
+                    { value: 'moderate', label: 'Moderate', desc: 'Some activities affected' },
+                    { value: 'severe', label: 'Severe', desc: 'Unable to do normal activities' }
+                  ].map(impact => (
+                    <button
+                      key={impact.value}
+                      onClick={() => setTriageData({...triageData, dailyImpact: impact.value})}
+                      className={`p-3 rounded-lg text-center transition-colors border ${
+                        triageData.dailyImpact === impact.value 
+                          ? 'bg-blue-50 border-blue-500' 
+                          : 'bg-white border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className={`font-medium ${triageData.dailyImpact === impact.value ? 'text-blue-700' : 'text-gray-800'}`}>
+                        {impact.label}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">{impact.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Do you have a fever or elevated temperature? <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setTriageData({...triageData, hasFever: true})}
+                    className={`flex-1 p-3 rounded-lg font-medium transition-colors border ${
+                      triageData.hasFever === true 
+                        ? 'bg-red-50 border-red-500 text-red-700' 
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => setTriageData({...triageData, hasFever: false, feverTemp: ''})}
+                    className={`flex-1 p-3 rounded-lg font-medium transition-colors border ${
+                      triageData.hasFever === false 
+                        ? 'bg-green-50 border-green-500 text-green-700' 
+                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    No
+                  </button>
+                </div>
+                {triageData.hasFever && (
+                  <div className="mt-3">
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      placeholder="Temperature in °C (e.g., 38.5)"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={triageData.feverTemp}
+                      onChange={(e) => setTriageData({...triageData, feverTemp: e.target.value})}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-8">
+              <button 
+                onClick={() => setStep('symptoms')}
+                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-200"
+              >
+                Back
+              </button>
+              <button 
+                onClick={handleSeverityNext}
+                disabled={!triageData.duration || !triageData.dailyImpact || triageData.hasFever === null}
+                className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Get Results
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'results' && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 md:p-8 border border-gray-100">
+            {(() => {
+              const rec = getRecommendation();
+              return (
+                <>
+                  <div className={`text-center p-6 rounded-xl mb-6 ${
+                    rec.color === 'red' ? 'bg-red-50 border border-red-200' :
+                    rec.color === 'yellow' ? 'bg-yellow-50 border border-yellow-200' :
+                    'bg-green-50 border border-green-200'
+                  }`}>
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                      rec.color === 'red' ? 'bg-red-100' :
+                      rec.color === 'yellow' ? 'bg-yellow-100' :
+                      'bg-green-100'
+                    }`}>
+                      {rec.color === 'red' ? <AlertTriangle className="text-red-600" size={32} /> :
+                       rec.color === 'yellow' ? <Clock className="text-yellow-600" size={32} /> :
+                       <CheckCircle className="text-green-600" size={32} />}
+                    </div>
+                    <h2 className={`text-xl font-bold mb-2 ${
+                      rec.color === 'red' ? 'text-red-800' :
+                      rec.color === 'yellow' ? 'text-yellow-800' :
+                      'text-green-800'
+                    }`}>
+                      {rec.level === 'urgent' ? 'Urgent Care Recommended' :
+                       rec.level === 'moderate' ? 'Book an Appointment' :
+                       'Self-Care Advised'}
+                    </h2>
+                    <p className={`${
+                      rec.color === 'red' ? 'text-red-700' :
+                      rec.color === 'yellow' ? 'text-yellow-700' :
+                      'text-green-700'
+                    }`}>
+                      {rec.message}
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                    <div className="text-center">
+                      <p className="text-sm text-gray-500 mb-1">Your Reference Number</p>
+                      <p className="text-2xl font-mono font-bold text-gray-800">{referenceNumber}</p>
+                      <p className="text-xs text-gray-400 mt-2">Please save this for your records</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 rounded-xl p-4 mb-6 border border-blue-200">
+                    <h3 className="font-medium text-blue-800 mb-2">Summary of your responses:</h3>
+                    <ul className="text-sm text-blue-700 space-y-1">
+                      <li>• Body system: {triageData.bodySystem || triageData.commonComplaint}</li>
+                      <li>• Pain level: {triageData.painScale}/10</li>
+                      <li>• Duration: {triageData.duration}</li>
+                      <li>• Daily impact: {triageData.dailyImpact}</li>
+                      <li>• Fever: {triageData.hasFever ? `Yes${triageData.feverTemp ? ` (${triageData.feverTemp}°C)` : ''}` : 'No'}</li>
+                    </ul>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <button 
+                      onClick={onBack}
+                      className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-200"
+                    >
+                      Return to Home
+                    </button>
+                    <button 
+                      onClick={() => setShowClinician(true)}
+                      className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center gap-2"
+                    >
+                      <User size={18} /> Speak to Clinician
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+
+      {showClinician && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Contact a Clinician</h3>
+            <p className="text-gray-600 mb-6">
+              If you need to speak with a healthcare professional immediately, please use one of the following options:
+            </p>
+            <div className="space-y-3">
+              <a href="tel:111" className="block w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-center hover:bg-blue-700">
+                📞 Call NHS 111
+              </a>
+              <a href="tel:999" className="block w-full bg-red-600 text-white py-3 rounded-xl font-bold text-center hover:bg-red-700">
+                🚨 Emergency: Call 999
+              </a>
+            </div>
+            {referenceNumber && (
+              <p className="text-center text-sm text-gray-500 mt-4">
+                Your reference: <span className="font-mono font-bold">{referenceNumber}</span>
+              </p>
+            )}
+            <button 
+              onClick={() => setShowClinician(false)}
+              className="w-full mt-4 bg-gray-100 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-200"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // 1. Login Page
-const LoginPage = ({ onLogin, staffData }) => {
+const LoginPage = ({ onLogin, staffData, onTriageClick }) => {
   const [email, setEmail] = useState('admin@hospital.com');
   const [password, setPassword] = useState('password');
   const [showPassword, setShowPassword] = useState(false);
@@ -188,6 +662,13 @@ const LoginPage = ({ onLogin, staffData }) => {
             <p>Staff: s.jenkin@hospital.com (or any other staff email)</p>
             <p>Pass: password (any)</p>
           </div>
+          
+          <button 
+            onClick={onTriageClick}
+            className="w-full bg-green-500 text-white py-3 px-4 rounded-lg font-bold hover:bg-green-600 transition-colors flex items-center justify-center gap-2 shadow-md"
+          >
+            <User size={18} /> Patient Self-Triage
+          </button>
         </div>
       </div>
     </div>
@@ -441,7 +922,6 @@ const AdminDashboard = ({ staff, shifts, weekDates, setActiveTab, onRunOptimizat
     return staff.map(member => {
       const memberShifts = shifts.filter(s => s.staffId === member.id && s.date >= weekStart && s.date <= weekEnd);
       const hours = memberShifts.reduce((acc, curr) => acc + curr.hours, 0);
-      // Use the second word (actual first name) instead of title like "Dr." or "Nurse"
       const nameParts = member.name.split(' ');
       const displayName = nameParts.length > 1 ? nameParts[1] : nameParts[0];
       return { name: displayName, hours, capacity: member.capacity };
@@ -805,6 +1285,7 @@ const SettingsPage = ({ onLogout, currentUser }) => {
 // 9. Main App
 const App = () => {
   const [currentUser, setCurrentUser] = useState(null);
+  const [showTriage, setShowTriage] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -886,7 +1367,12 @@ const App = () => {
     setShowStaffModal(false);
   };
 
-  if (!currentUser) return <LoginPage onLogin={setCurrentUser} staffData={staff} />;
+  if (!currentUser) {
+    if (showTriage) {
+      return <PatientTriage onBack={() => setShowTriage(false)} />;
+    }
+    return <LoginPage onLogin={setCurrentUser} staffData={staff} onTriageClick={() => setShowTriage(true)} />;
+  }
 
   const isReadOnly = currentUser.role === 'staff';
 
